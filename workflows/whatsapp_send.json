@@ -1,0 +1,62 @@
+{
+  "id": "whatsapp_send_workflow",
+  "name": "Send WhatsApp Message",
+  "description": "Open WhatsApp, search for contact, and send a message",
+  "version": "1.0",
+  "tags": ["messaging", "whatsapp", "contact"],
+  "steps": [
+    {
+      "id": "open_whatsapp",
+      "action": "open_app",
+      "params": {
+        "package": "com.whatsapp",
+        "name": "WhatsApp"
+      },
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 1,
+        "retry_delay": 1.0,
+        "on_failure": "stop"
+      }
+    },
+    {
+      "id": "search_contact",
+      "action": "search_contact",
+      "params": {
+        "name": "$contact_name"
+      },
+      "conditions": [
+        {
+          "type": "equals",
+          "left": "$open_whatsapp.status",
+          "right": "opened"
+        }
+      ],
+      "timeout": 10.0,
+      "parallel_safe": false
+    },
+    {
+      "id": "send_message",
+      "action": "send_whatsapp",
+      "params": {
+        "phone": "$contact_phone",
+        "message": "$message_text"
+      },
+      "conditions": [
+        {
+          "type": "equals",
+          "left": "$search_contact.status",
+          "right": "searched"
+        }
+      ],
+      "error_handler": {
+        "retry_count": 2,
+        "retry_delay": 2.0,
+        "on_failure": "continue"
+      },
+      "timeout": 30.0,
+      "parallel_safe": false
+    }
+  ]
+}

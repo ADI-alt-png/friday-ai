@@ -1,0 +1,74 @@
+{
+  "id": "emergency_alert_workflow",
+  "name": "Emergency Alert Workflow",
+  "description": "Send emergency messages to multiple contacts with battery check",
+  "version": "1.0",
+  "tags": ["emergency", "messaging", "alert"],
+  "steps": [
+    {
+      "id": "check_battery",
+      "action": "check_battery",
+      "params": {},
+      "timeout": 5.0,
+      "parallel_safe": false
+    },
+    {
+      "id": "send_primary_alert",
+      "action": "send_sms",
+      "params": {
+        "phone": "$emergency_phone_1",
+        "message": "$emergency_message"
+      },
+      "conditions": [
+        {
+          "type": "greater_than",
+          "left": "$check_battery.battery",
+          "right": "10"
+        }
+      ],
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 3,
+        "retry_delay": 1.0,
+        "on_failure": "continue"
+      }
+    },
+    {
+      "id": "send_backup_alert",
+      "action": "send_sms",
+      "params": {
+        "phone": "$emergency_phone_2",
+        "message": "$emergency_message"
+      },
+      "conditions": [
+        {
+          "type": "has_value",
+          "left": "$emergency_phone_2"
+        }
+      ],
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 2,
+        "retry_delay": 1.0,
+        "on_failure": "continue"
+      }
+    },
+    {
+      "id": "send_whatsapp_alert",
+      "action": "send_whatsapp",
+      "params": {
+        "phone": "$emergency_contact",
+        "message": "🆘 EMERGENCY: $emergency_message"
+      },
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 2,
+        "retry_delay": 2.0,
+        "on_failure": "continue"
+      }
+    }
+  ]
+}

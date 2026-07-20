@@ -1,0 +1,66 @@
+{
+  "id": "reminder_workflow",
+  "name": "Time-based Reminder Workflow",
+  "description": "Check time and create reminder if conditions match",
+  "version": "1.0",
+  "tags": ["reminder", "calendar", "time-based"],
+  "steps": [
+    {
+      "id": "check_current_time",
+      "action": "check_time",
+      "params": {},
+      "timeout": 5.0,
+      "parallel_safe": false
+    },
+    {
+      "id": "open_calendar_app",
+      "action": "open_app",
+      "params": {
+        "package": "com.android.calendar",
+        "name": "Calendar"
+      },
+      "conditions": [
+        {
+          "type": "greater_than",
+          "left": "$check_current_time.hour",
+          "right": "8"
+        },
+        {
+          "type": "less_than",
+          "left": "$check_current_time.hour",
+          "right": "18"
+        }
+      ],
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 1,
+        "retry_delay": 1.0,
+        "on_failure": "continue"
+      }
+    },
+    {
+      "id": "create_reminder",
+      "action": "set_reminder",
+      "params": {
+        "title": "$reminder_title",
+        "time": "$reminder_time"
+      },
+      "conditions": [
+        {
+          "type": "equals",
+          "left": "$open_calendar_app.status",
+          "right": "opened"
+        }
+      ],
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 2,
+        "retry_delay": 2.0,
+        "on_failure": "continue",
+        "fallback_step": "open_calendar_app"
+      }
+    }
+  ]
+}

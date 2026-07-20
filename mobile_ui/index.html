@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="Friday AI - Mobile Phone Remote Control">
+    <title>Friday AI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="header-title">Friday AI</h1>
+                <div class="header-controls">
+                    <button class="icon-button" id="settingsBtn" aria-label="Settings" title="Settings">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l1.72-1.34c.15-.12.19-.34.1-.51l-1.63-2.83c-.12-.22-.37-.29-.59-.22l-2.03.81c-.42-.32-.9-.59-1.42-.78l-.31-2.15c-.04-.24-.24-.41-.48-.41h-3.26c-.24 0-.43.17-.47.41l-.31 2.15c-.52.19-1 .46-1.41.78l-2.04-.81c-.22-.09-.47 0-.59.22L2.74 8.87c-.12.21-.08.44.1.51l1.72 1.34c-.05.3-.07.62-.07.94s.02.64.07.94l-1.72 1.34c-.15.12-.19.34-.1.51l1.63 2.83c.12.22.37.29.59.22l2.03-.81c.42.32.9.59 1.42.78l.31 2.15c.05.24.24.41.48.41h3.26c.24 0 .44-.17.47-.41l.31-2.15c.52-.19 1-.46 1.41-.78l2.04.81c.22.09.47 0 .59-.22l1.63-2.83c.12-.22.07-.44-.1-.51l-1.72-1.34zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                        </svg>
+                    </button>
+                    <button class="icon-button" id="statusBtn" aria-label="Device Status" title="Device Status">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Voice Input Section -->
+            <section class="voice-section">
+                <div class="voice-container">
+                    <button class="voice-button" id="voiceBtn" aria-label="Voice Input" aria-pressed="false">
+                        <svg class="voice-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-1c-.49 0-.9.36-.98.85C16.52 14.5 14.41 16 12 16s-4.52-1.5-4.93-2.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1.01 1.14.4 2.87 3.03 5.05 6.02 5.05s5.62-2.18 6.02-5.05c.08-.6-.4-1.14-1.01-1.14zM19 0h-2v2h2V0zm4 9h2V7h-2v2zM5 9H3V7h2v2z"/>
+                        </svg>
+                        <span class="voice-text" id="voiceText">Tap to speak</span>
+                    </button>
+                    <div class="voice-visualizer" id="visualizer" aria-hidden="true">
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Actions -->
+            <section class="quick-actions-section">
+                <h2 class="section-title">Quick Actions</h2>
+                <div class="quick-actions-grid" id="quickActions">
+                    <button class="action-btn" data-action="open-whatsapp" aria-label="Open WhatsApp">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371 0-.57 0-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.004c-1.537 0-2.852-.504-3.986-1.495-1.102-.96-1.784-2.24-1.784-3.652 0-2.961 2.41-5.371 5.365-5.371 1.43 0 2.779.469 3.909 1.36 1.123.877 1.84 2.07 1.84 3.509 0 2.961-2.41 5.371-5.365 5.371m5.937-9.687C17.82.075 14.75 0 12 0S6.18.075 3.63 2.313C1.08 4.551 0 7.313 0 12c0 4.687 1.08 7.449 3.63 9.687S7.25 24 12 24s5.82-.075 8.37-2.313c2.55-2.238 3.63-4.875 3.63-9.687 0-4.687-1.08-7.449-3.63-9.687"/>
+                        </svg>
+                        <span>WhatsApp</span>
+                    </button>
+                    <button class="action-btn" data-action="send-sms" aria-label="Send SMS">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12h-8v-2h8v2zm0-3h-8V9h8v2zm0-3H4V4h16v4z"/>
+                        </svg>
+                        <span>SMS</span>
+                    </button>
+                    <button class="action-btn" data-action="take-screenshot" aria-label="Take Screenshot">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                        </svg>
+                        <span>Screenshot</span>
+                    </button>
+                    <button class="action-btn" data-action="lock-device" aria-label="Lock Device">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.72-7 8.77V12H5V6.3l7-3.11v8.8z"/>
+                        </svg>
+                        <span>Lock</span>
+                    </button>
+                    <button class="action-btn" data-action="toggle-wifi" aria-label="Toggle WiFi">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
+                        </svg>
+                        <span>WiFi</span>
+                    </button>
+                    <button class="action-btn" data-action="toggle-bluetooth" aria-label="Toggle Bluetooth">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+                        </svg>
+                        <span>Bluetooth</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Device Status -->
+            <section class="device-status-section">
+                <h2 class="section-title">Device Status</h2>
+                <div class="status-grid" id="statusGrid">
+                    <div class="status-item">
+                        <span class="status-label">Battery</span>
+                        <div class="battery-display">
+                            <div class="battery-bar" id="batteryBar"></div>
+                            <span class="battery-text" id="batteryText">--</span>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Connection</span>
+                        <div class="connection-status" id="connectionStatus">
+                            <span class="status-dot disconnected"></span>
+                            <span id="connectionText">Connecting...</span>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Current App</span>
+                        <span class="app-name" id="appName">--</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Screen State</span>
+                        <span class="screen-state" id="screenState">--</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Command History -->
+            <section class="history-section">
+                <div class="history-header">
+                    <h2 class="section-title">Command History</h2>
+                    <button class="text-button" id="clearHistoryBtn" aria-label="Clear History">Clear</button>
+                </div>
+                <div class="history-list" id="historyList">
+                    <p class="empty-state">No commands yet. Tap the microphone to start.</p>
+                </div>
+            </section>
+
+            <!-- Action Queue -->
+            <section class="action-queue-section">
+                <h2 class="section-title">Executing</h2>
+                <div class="action-queue" id="actionQueue">
+                    <p class="empty-state">No actions executing</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal" role="dialog" aria-labelledby="settingsTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="settingsTitle">Settings</h2>
+                <button class="close-button" aria-label="Close settings" data-close-modal>×</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-group">
+                    <label class="toggle-label">
+                        <span>Dark Mode</span>
+                        <input type="checkbox" class="toggle-input" id="darkModeToggle" checked aria-label="Toggle dark mode">
+                        <span class="toggle-switch"></span>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <label class="toggle-label">
+                        <span>Verbose Output</span>
+                        <input type="checkbox" class="toggle-input" id="verboseToggle" aria-label="Toggle verbose output">
+                        <span class="toggle-switch"></span>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <label for="voiceLangSelect">Voice Language</label>
+                    <select id="voiceLangSelect" class="form-select">
+                        <option value="en-US">English (US)</option>
+                        <option value="en-GB">English (UK)</option>
+                        <option value="es-ES">Spanish</option>
+                        <option value="fr-FR">French</option>
+                        <option value="de-DE">German</option>
+                        <option value="it-IT">Italian</option>
+                    </select>
+                </div>
+
+                <div class="settings-group">
+                    <label for="serverUrl">Server URL</label>
+                    <input type="url" id="serverUrl" class="form-input" placeholder="ws://localhost:8000" aria-label="Server URL">
+                </div>
+
+                <div class="settings-group">
+                    <label class="toggle-label">
+                        <span>Sound Feedback</span>
+                        <input type="checkbox" class="toggle-input" id="soundToggle" checked aria-label="Toggle sound feedback">
+                        <span class="toggle-switch"></span>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <label for="historySize">History Size</label>
+                    <select id="historySize" class="form-select">
+                        <option value="20">20 items</option>
+                        <option value="50" selected>50 items</option>
+                        <option value="100">100 items</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-close-modal>Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Status Modal -->
+    <div class="modal" id="statusModal" role="dialog" aria-labelledby="statusTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="statusTitle">Device Details</h2>
+                <button class="close-button" aria-label="Close details" data-close-modal>×</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-item">
+                    <span class="detail-label">Battery Level:</span>
+                    <span class="detail-value" id="detailBattery">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Battery Status:</span>
+                    <span class="detail-value" id="detailBatteryStatus">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Screen On:</span>
+                    <span class="detail-value" id="detailScreenOn">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">WiFi Connected:</span>
+                    <span class="detail-value" id="detailWiFi">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Bluetooth:</span>
+                    <span class="detail-value" id="detailBluetooth">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Device Name:</span>
+                    <span class="detail-value" id="detailDeviceName">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Android Version:</span>
+                    <span class="detail-value" id="detailAndroidVersion">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Connection:</span>
+                    <span class="detail-value" id="detailConnection">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast-container" id="toastContainer" role="region" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
+        <div class="spinner"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

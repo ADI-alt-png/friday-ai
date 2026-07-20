@@ -1,0 +1,52 @@
+{
+  "id": "screenshot_analyze_workflow",
+  "name": "Screenshot and Analyze",
+  "description": "Take screenshot and extract text using OCR",
+  "version": "1.0",
+  "tags": ["device", "screenshot", "ocr", "analysis"],
+  "steps": [
+    {
+      "id": "capture_screenshot",
+      "action": "take_screenshot",
+      "params": {
+        "save_path": "friday_output/workflow_screenshot.png"
+      },
+      "timeout": 15.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 1,
+        "retry_delay": 1.0,
+        "on_failure": "stop"
+      }
+    },
+    {
+      "id": "extract_text",
+      "action": "read_text",
+      "params": {
+        "image_path": "$capture_screenshot.path"
+      },
+      "conditions": [
+        {
+          "type": "has_value",
+          "left": "$capture_screenshot.path"
+        }
+      ],
+      "timeout": 30.0,
+      "parallel_safe": false,
+      "error_handler": {
+        "retry_count": 1,
+        "retry_delay": 2.0,
+        "on_failure": "continue"
+      }
+    },
+    {
+      "id": "log_result",
+      "action": "delay",
+      "params": {
+        "seconds": 1
+      },
+      "timeout": 5.0,
+      "parallel_safe": false
+    }
+  ]
+}
