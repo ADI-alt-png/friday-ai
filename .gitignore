@@ -19,3 +19,6 @@ Thumbs.db
 
 # Local config with API keys (create your own from example)
 friday_config.json
+
+# Auto-sync logs
+sync_log.txt
