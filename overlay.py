@@ -17,16 +17,37 @@ canvas.pack(fill="both", expand=True)
 
 # Queues and data structures
 word_queue = queue.Queue()
-current_line_words = []  # Current line being built
-all_lines = []  # All completed lines
+current_line_words = []
+all_lines = []
 
 FONT = ("Segoe UI", 18)
 LINE_SPACING = 8
-MAX_WORDS_PER_LINE = 20  # 20 words per line
-MAX_LINES = 6  # Maximum 6 lines total
+MAX_WORDS_PER_LINE = 20
+MAX_LINES = 6
 
 # Timer for completing current line
 completion_timer = None
+
+# ── Auto-hide ────────────────────────────────────────────────────────────────
+_idle_timer = None
+_IDLE_TIMEOUT = 10  # seconds after last text before overlay hides
+
+def _hide():
+    root.withdraw()
+
+def _reset_idle():
+    global _idle_timer
+    if _idle_timer:
+        root.after_cancel(_idle_timer)
+    _idle_timer = root.after(_IDLE_TIMEOUT * 1000, _hide)
+
+def show_overlay():
+    global _idle_timer
+    if _idle_timer:
+        root.after_cancel(_idle_timer)
+        _idle_timer = None
+    root.deiconify()
+    _reset_idle()
 
 def reset_completion_timer():
     """Reset timer to complete line after pause"""
@@ -140,6 +161,7 @@ def draw_active_text(x, y, text):
 
 def update_text(text):
     """Called from Friday - splits text into words and queues them"""
+    _reset_idle()
     words = text.split()
     print(f"\n[MSG] Received {len(words)} words: '{text[:80]}...'")
     

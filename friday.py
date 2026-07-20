@@ -29,16 +29,34 @@ import edge_tts
 
 from api_config import client as api_client, chat_completion, GROQ_MODEL as api_model, get_client_info
 
-try:
-    from deep_learning import (
-        DLCommandRouter, DLIntentClassifier, DLEmotionAnalyzer, DLImageAnalyzer,
-        dl_classify, dl_emotion, dl_describe_image, dl_get_emotion_modifier,
-        command_router as dl_router, dl_trainer, get_dl_status,
-    )
-    DL_AVAILABLE = True
-except ImportError:
-    DL_AVAILABLE = False
-    print("[DL] deep_learning.py not found — DL features disabled.")
+DL_AVAILABLE = False
+_dl_loaded = False
+
+def _ensure_dl():
+    global DL_AVAILABLE, _dl_loaded, dl_classify, dl_emotion, dl_describe_image, dl_get_emotion_modifier, dl_router, dl_trainer, get_dl_status
+    if _dl_loaded:
+        return
+    _dl_loaded = True
+    try:
+        from deep_learning import (
+            dl_classify as _dc, dl_emotion as _de, dl_describe_image as _dd,
+            dl_get_emotion_modifier as _dg, command_router as _dr, dl_trainer as _dt, get_dl_status as _ds,
+        )
+        dl_classify = _dc; dl_emotion = _de; dl_describe_image = _dd
+        dl_get_emotion_modifier = _dg; dl_router = _dr; dl_trainer = _dt; get_dl_status = _ds
+        DL_AVAILABLE = True
+    except Exception:
+        DL_AVAILABLE = False
+        print("[DL] deep_learning.py not found — DL features disabled.")
+
+# Stub functions until DL loads
+dl_classify = lambda t: {"intent": "general_chat", "intent_confidence": 0, "mapped_command": "", "emotion": {}, "top_intents": []}
+dl_emotion = lambda t: {"dominant_emotion": "neutral", "sentiment": "neutral"}
+dl_describe_image = lambda p: ""
+dl_get_emotion_modifier = lambda t: ""
+dl_router = type("_", (), {"get_emotion_response_modifier": lambda s, e: ""})()
+dl_trainer = type("_", (), {"record": lambda s, c, i, r: None, "get_stats": lambda s: {"total": 0, "accuracy": 0}})()
+get_dl_status = lambda: {"transformers": False, "torch": False, "cuda": False}
 
 pywhatkit = None
 pywhatkit_import_error = None
@@ -575,6 +593,54 @@ def open_phone_remote_dashboard():
     except Exception as e:
         return f"Phone remote failed, Boss: {e}"
 
+def read_phone_key():
+    try:
+        if os.path.exists(PHONE_REMOTE_TOKEN_FILE):
+            with open(PHONE_REMOTE_TOKEN_FILE) as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return ""
+
+CLOUDFLARED_PATH = r"C:\Program Files (x86)\cloudflared\cloudflared.exe"
+
+def start_remote_tunnel():
+    if not os.path.exists(CLOUDFLARED_PATH):
+        return "Cloudflared not installed, Boss. Run: winget install Cloudflare.cloudflared"
+    try:
+        key = read_phone_key()
+        url_param = f"?key={key}" if key else ""
+        port = PHONE_REMOTE_PORT
+        proc = subprocess.Popen(
+            [CLOUDFLARED_PATH, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        import threading
+        def find_url(proc):
+            import re
+            for line in iter(proc.stdout.readline, b""):
+                line = line.decode(errors="replace")
+                m = re.search(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com", line)
+                if m:
+                    full_url = m.group() + url_param
+                    open_in_chrome(full_url)
+                    output_dir = "friday_output"
+                    os.makedirs(output_dir, exist_ok=True)
+                    with open(os.path.join(output_dir, "tunnel_url.txt"), "w") as f:
+                        f.write(full_url)
+                    try:
+                        import qrcode
+                        qr = qrcode.make(full_url)
+                        qr.save(os.path.join(output_dir, "remote_qr.png"))
+                    except Exception:
+                        pass
+                    break
+        threading.Thread(target=find_url, args=(proc,), daemon=True).start()
+        return "Remote tunnel starting, Boss. Check your browser."
+    except Exception as e:
+        return f"Remote tunnel failed: {e}"
+
 # ── Register Chrome as default browser for webbrowser module ────────────────
 CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 _chrome_available = os.path.exists(CHROME_PATH)
@@ -598,6 +664,42 @@ def open_in_chrome(url):
             webbrowser.open(url)
     except Exception:
         webbrowser.open(url)  # final fallback
+
+def improve_self(command):
+    try:
+        import ast
+        instruction = command.replace("improve yourself", "").replace("improve your code", "").replace("modify yourself", "").replace("update your code", "").replace("self improve", "").strip()
+        if not instruction:
+            return "What should I improve, Boss?"
+        files_to_modify = {"friday.py": __file__}
+        if os.path.exists("deep_learning.py"):
+            files_to_modify["deep_learning.py"] = os.path.abspath("deep_learning.py")
+        changes = {}
+        for fname, fpath in files_to_modify.items():
+            with open(fpath, encoding="utf-8") as f:
+                source = f.read()
+            plan = ask_ai(f"FRIDAY source file: {fname}\n\nUser request: {instruction}\n\nReturn ONLY a Python code change. Format:\nFILE: {fname}\nREPLACE_EXACT:\n<exact code to replace>\nWITH:\n<new code>\n---\nIf no change needed, return: NO_CHANGE", use_history=False)
+            if "NO_CHANGE" in plan:
+                continue
+            if "REPLACE_EXACT:" in plan and "WITH:" in plan:
+                changes[fname] = plan
+        if not changes:
+            return "No changes needed, Boss."
+        for fname, plan in changes.items():
+            fpath = files_to_modify[fname]
+            with open(fpath, encoding="utf-8") as f:
+                source = f.read()
+            for block in plan.split("---"):
+                if "REPLACE_EXACT:" in block and "WITH:" in block:
+                    old = block.split("REPLACE_EXACT:")[1].split("WITH:")[0].strip()
+                    new = block.split("WITH:")[1].strip()
+                    if old in source:
+                        source = source.replace(old, new, 1)
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(source)
+        return f"Applied {len(changes)} change(s). Restart me to see the update, Boss."
+    except Exception as e:
+        return f"Self-improve failed: {e}"
 
 def open_google_search(query):
     query = (query or "").strip()
@@ -2123,7 +2225,7 @@ def ai_execute_task(command):
     result = execute_action_plan(plan, command)
     return result
 
-from overlay        import update_text, root
+from overlay        import update_text, root, show_overlay
 from status_overlay import update_status, create_status_overlay
 
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -2147,6 +2249,12 @@ latest_frame_path  = None
 _last_alert_time = 0
 _ALERT_COOLDOWN  = 15          # seconds between spoken screen alerts
 _screen_lock     = threading.Lock()   # FIX: thread-safe last_screen_text access
+
+# ── Command dedup ────────────────────────────────────────────────────────────
+_last_command     = ""
+_last_command_time = 0
+_executing_lock   = threading.Lock()
+_COMMAND_COOLDOWN = 2.0        # ignore same command within this many seconds
 
 # ── FRIDAY system prompt (Iron Man movie accurate) ───────────────────────────
 FRIDAY_SYSTEM_PROMPT = """You are FRIDAY — Tony Stark's AI from Iron Man movies.
@@ -2824,525 +2932,269 @@ def execute_and_get_reply(command):
     return _last_reply or "Done, Boss."
 
 def execute(command):
-    global vmonitoring, latest_frame_path, _last_reply
+    global vmonitoring, latest_frame_path, _last_reply, _last_command, _last_command_time
 
     command = (command or "").strip().lower()
     if not command:
         return
+
+    # ── Dedup: skip if same command within cooldown ──────────────────────────
+    now = time.time()
+    if command == _last_command and (now - _last_command_time) < _COMMAND_COOLDOWN:
+        print(f"[DEDUP] Skipping duplicate: '{command}' ({(now-_last_command_time):.1f}s)")
+        return
+    _last_command = command
+    _last_command_time = now
+
+    if not _executing_lock.acquire(blocking=False):
+        print(f"[LOCK] Already executing, skipping: '{command}'")
+        return
+
+    try:
+        _execute_inner(command)
+    finally:
+        _executing_lock.release()
+
+
+import difflib
+
+_learned_data = {"commands": [], "responses": []}
+_LEARNED_FILE = os.path.join(OUTPUT_DIR, "learned_responses.json")
+_ml_vectorizer = None
+_ml_matrix = None
+
+def _ml_train():
+    global _ml_vectorizer, _ml_matrix
+    texts = _learned_data["commands"]
+    if len(texts) < 2:
+        _ml_vectorizer = _ml_matrix = None
+        return
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        _ml_vectorizer = TfidfVectorizer(stop_words="english", max_features=500)
+        vecs = _ml_vectorizer.fit_transform(texts)
+        _ml_matrix = cosine_similarity(vecs)
+    except Exception:
+        _ml_vectorizer = _ml_matrix = None
+
+def _load_learned():
+    global _learned_data
+    try:
+        if os.path.exists(_LEARNED_FILE):
+            with open(_LEARNED_FILE, encoding="utf-8") as f:
+                _learned_data = json.load(f)
+    except Exception:
+        _learned_data = {"commands": [], "responses": []}
+    _ml_train()
+
+def _save_learned():
+    try:
+        with open(_LEARNED_FILE, "w", encoding="utf-8") as f:
+            json.dump(_learned_data, f, indent=2)
+    except Exception:
+        pass
+
+def _learn(command, response):
+    _learned_data["commands"].append(command)
+    _learned_data["responses"].append(response)
+    if len(_learned_data["commands"]) > 500:
+        _learned_data["commands"] = _learned_data["commands"][-300:]
+        _learned_data["responses"] = _learned_data["responses"][-300:]
+    _ml_train()
+    _save_learned()
+
+def _recall_learned(command):
+    cmds = _learned_data["commands"]
+    resps = _learned_data["responses"]
+    if not cmds:
+        return None
+
+    # exact match
+    for c, r in zip(cmds, resps):
+        if command == c:
+            return r
+
+    # TF-IDF semantic match
+    if _ml_vectorizer and _ml_matrix is not None and len(cmds) >= 2:
+        try:
+            vec = _ml_vectorizer.transform([command])
+            from sklearn.metrics.pairwise import cosine_similarity
+            sims = cosine_similarity(vec, _ml_vectorizer.transform(cmds))[0]
+            best_idx = sims.argmax()
+            if sims[best_idx] > 0.7:
+                return resps[best_idx]
+        except Exception:
+            pass
+
+    # fallback: difflib
+    matches = difflib.get_close_matches(command, cmds, n=1, cutoff=0.85)
+    if matches:
+        return resps[cmds.index(matches[0])]
+    return None
+
+_load_learned()
+
+def _execute_inner(command):
+    global vmonitoring, latest_frame_path, _last_reply
+
+    _ensure_dl()
+
     log_history("command", command)
     add_chat_message("user", command)
 
+    # ── Only system-critical rules. Everything else → AI. ────────────────────
     if command in [
         "connect phone", "connect my phone", "phone remote", "open phone remote",
         "open phone control", "phone control", "mobile remote", "mobile control",
         "phone link", "open phone link"
     ]:
-        speak(open_phone_remote_dashboard())
-        return
+        speak(open_phone_remote_dashboard()); return
+
+    if command in ["enable remote", "remote access", "start remote", "open remote", "remote on"]:
+        speak(start_remote_tunnel()); return
+
+    if any(cmd in command for cmd in ["improve yourself", "improve your code", "modify yourself", "update your code", "self improve"]):
+        speak(improve_self(command)); return
 
     if command.startswith("run powershell "):
-        speak(run_local_command(command.split("run powershell ", 1)[1], powershell=True))
-        return
-    if command.startswith("run command "):
-        speak(run_local_command(command.split("run command ", 1)[1], powershell=False))
-        return
-    if command.startswith("run cmd "):
-        speak(run_local_command(command.split("run cmd ", 1)[1], powershell=False))
-        return
-    if command == "shutdown":
-        speak("Say confirm shutdown, Boss.")
-        return
-    if command == "confirm shutdown":
-        speak("Shutting down, Boss.")
-        os.system("shutdown /s /t 1")
-        return
-    if command == "restart":
-        speak("Say confirm restart, Boss.")
-        return
-    if command == "confirm restart":
-        speak("Restarting, Boss.")
-        os.system("shutdown /r /t 1")
-        return
+        speak(run_local_command(command.split("run powershell ", 1)[1], powershell=True)); return
+    if command.startswith("run command ") or command.startswith("run cmd "):
+        prefix = "run command " if command.startswith("run command ") else "run cmd "
+        speak(run_local_command(command.split(prefix, 1)[1], powershell=False)); return
 
-    email_result = handle_email_command(command)
-    if email_result:
-        speak(email_result)
-        return
-
-    code_result = handle_code_command(command)
-    if code_result:
-        speak(code_result)
-        return
-
-    context_result = handle_context_and_learning_command(command)
-    if context_result:
-        speak(context_result)
-        return
-
-    next_level_result = handle_next_level_command(command)
-    if next_level_result:
-        speak(next_level_result)
-        return
-
-    if any(word in command for word in ["news", "headlines"]) or "todays new" in command or "today's new" in command:
-        speak(fetch_news(extract_news_topic(command)))
-        return
-
-    if command.startswith("search ") or command.startswith("google "):
-        query = command.split(" ", 1)[1].strip() if " " in command else ""
-        speak(open_google_search(query))
-        return
-
-    if command.startswith("search for "):
-        speak(open_google_search(command.split("search for ", 1)[1]))
-        return
-
-    if command.startswith("look up "):
-        speak(open_google_search(command.split("look up ", 1)[1]))
-        return
+    if command in ("shutdown", "confirm shutdown"):
+        if command == "shutdown": speak("Say confirm shutdown, Boss."); return
+        speak("Shutting down, Boss."); os.system("shutdown /s /t 1"); return
+    if command in ("restart", "confirm restart"):
+        if command == "restart": speak("Say confirm restart, Boss."); return
+        speak("Restarting, Boss."); os.system("shutdown /r /t 1"); return
 
     if "weather" in command or "temperature" in command:
-        speak(open_weather(command))
-        return
+        speak(open_weather(command)); return
 
     if command in ["time", "what time is it", "current time", "tell me time"]:
-        speak(current_time_reply())
-        return
-
+        speak(current_time_reply()); return
     if command in ["date", "today date", "what is today's date", "what date is it"]:
-        speak(current_date_reply())
-        return
+        speak(current_date_reply()); return
 
-    if command.startswith("open "):
-        special_result = open_special_target(command)
-        if special_result:
-            speak(special_result)
-            return
-        app_name = command.replace("open", "", 1).strip()
-        if app_name in ["code", "vs code", "vscode", "visual studio code"]:
-            speak(open_code())
-            return
-
-    if any(word in command for word in ["latest", "current", "recent", "today"]) and not any(
-        skip in command for skip in ["start monitoring", "stop monitoring", "today date", "current tab"]
-    ):
-        speak(open_google_search(command))
-        return
-
-    print(f"\n[CMD] {command}")
-    original_command = command
-    command = correct_command(command)
-    if original_command != command:
-        print(f"[CORRECTED] '{original_command}' -> '{command}'")
-
-    # ── System monitoring ────────────────────────────────────────────────────
+    # ── Screen/system control ────────────────────────────────────────────────
     if "start monitoring" in command:
-        if not vmonitoring:
-            vmonitoring = True
-            threading.Thread(target=monitor_system, daemon=True).start()
-        update_status("Monitoring: ON")
-        speak("System monitoring active, Boss.")
-        return
-
+        if not vmonitoring: vmonitoring = True; threading.Thread(target=monitor_system, daemon=True).start()
+        update_status("Monitoring: ON"); speak("System monitoring active, Boss."); return
     if "stop monitoring" in command:
-        vmonitoring = False
-        update_status("Monitoring: OFF")
-        speak("System monitoring offline, Boss.")
-        return
+        vmonitoring = False; update_status("Monitoring: OFF"); speak("System monitoring offline, Boss."); return
 
-    # ── Live screen ──────────────────────────────────────────────────────────
     if "start live screen" in command or "start screen monitoring" in command:
-        start_live_screen()
-        return
-
+        start_live_screen(); return
     if "stop live screen" in command or "stop screen monitoring" in command:
-        stop_live_screen()
-        return
+        stop_live_screen(); return
 
-    if "screen monitoring status" in command or "is screen monitoring on" in command:
-        state = "active" if live_screen_mode else "offline"
-        speak(f"Screen monitoring is {state}, Boss.")
-        return
-
-    # ── Screen click ─────────────────────────────────────────────────────────
     if "click on" in command:
         element = command.replace("click on", "").strip()
-        click_on_screen(element) if element else speak("Specify what to click, Boss.")
+        if element: click_on_screen(element)
+        else: speak("Specify what to click, Boss.")
         return
-
-    if command.startswith("click the "):
-        element = command.replace("click the", "", 1).strip()
-        click_on_screen(element)
-        return
-
-    # ── Screen type ──────────────────────────────────────────────────────────
     if "type in" in command:
         parts = command.split("type in", 1)[1].strip()
         if " as " in parts:
             field, text_to_type = parts.split(" as ", 1)
             type_on_screen(field.strip(), text_to_type.strip())
-        else:
-            speak("Format: 'type in [field] as [text]', Boss.")
+        else: speak("Format: 'type in [field] as [text]', Boss.")
         return
 
-    # ── Key press ────────────────────────────────────────────────────────────
-    if "press" in command and ("key" in command or "button" in command):
-        key = command.replace("press","").replace("key","").replace("button","").strip()
-        press_key(key)
-        return
-
-    # ── Smart screen action ──────────────────────────────────────────────────
-    if any(p in command for p in ["do that", "perform that", "do this"]):
-        if live_screen_mode:
-            perform_screen_action(command)
-        else:
-            speak("Activate live screen mode first, Boss.")
-        return
-
-    # ── Screen navigation ────────────────────────────────────────────────────
-    if "go to" in command and "website" in command:
-        site = command.replace("go to","").replace("website","").strip()
-        if site:
-            pyautogui.hotkey('ctrl', 'l')
-            time.sleep(0.5)
-            pyautogui.write(site)
-            pyautogui.press('enter')
-            speak(f"Navigating to {site}, Boss.")
-        return
-
-    # ── Find on screen ───────────────────────────────────────────────────────
-    if "find" in command and "on screen" in command:
-        capture_screen()
-        element  = command.replace("find","").replace("on screen","").strip()
-        elements = detect_ui_elements()
-        found    = [e for e in elements if element.lower() in e['text']]
-        if found:
-            x, y = found[0]['center']
-            pyautogui.moveTo(x, y, duration=0.5)
-            speak(f"Found {len(found)} match(es) for '{element}', Boss.")
-        else:
-            speak(f"'{element}' not found on screen, Boss.")
-        return
-
-    # ── Music / video control ────────────────────────────────────────────────
     if "stop music" in command or "pause music" in command:
-        pyautogui.press('space')
-        speak("Paused, Boss.")
-        return
-
+        pyautogui.press('space'); speak("Paused, Boss."); return
     if "resume music" in command:
-        pyautogui.press('space')
-        speak("Resumed, Boss.")
-        return
-
-    # ── Close tab ────────────────────────────────────────────────────────────
+        pyautogui.press('space'); speak("Resumed, Boss."); return
     if "close tab" in command:
-        speak("Closing tab, Boss." if close_current_tab() else "Could not close tab, Boss.")
-        return
-
-    # ── Close application ────────────────────────────────────────────────────
+        speak("Closing tab, Boss." if close_current_tab() else "Could not close tab, Boss."); return
     if "close application" in command or "close app" in command:
-        app_name = command.replace("close application","").replace("close app","").strip()
-        if app_name:
-            speak(f"Closed {app_name}, Boss." if close_application(app_name) else f"Could not close {app_name}, Boss.")
-        else:
-            speak("Closing active window, Boss." if close_active_window() else "Could not close window, Boss.")
+        app_name = (command.replace("close application","").replace("close app","").strip())
+        if app_name: speak(f"Closed {app_name}, Boss." if close_application(app_name) else f"Could not close {app_name}, Boss.")
+        else: speak("Closing active window, Boss." if close_active_window() else "Could not close window, Boss.")
         return
-
-    # ── Minimize all ─────────────────────────────────────────────────────────
     if "minimize all" in command or "show desktop" in command:
-        speak("Minimised all windows, Boss." if minimize_all_windows() else "Could not minimise, Boss.")
-        return
+        speak("Minimised all windows, Boss." if minimize_all_windows() else "Could not minimise, Boss."); return
 
-    # ── Shutdown / restart ───────────────────────────────────────────────────
-    if "shutdown" in command:
-        speak("Shutting down, Boss.")
-        os.system("shutdown /s /t 1")
-        return
-    if "restart" in command:
-        speak("Restarting, Boss.")
-        os.system("shutdown /r /t 1")
-        return
-
-    # ── Open website — MUST be before generic "open" check ──────────────────
-    if "open website" in command:
-        site = command.replace("open website","").strip().lower()
-        if site:
-            url = website_urls.get(site, f"https://www.{site}.com" if "." not in site else f"https://{site}")
-            speak(f"Opening {site} in Chrome, Boss.")
-            open_in_chrome(url)
-        else:
-            speak("Which website, Boss?")
-        return
-
-    # ── Go to (website) ──────────────────────────────────────────────────────
-    if command.startswith("go to "):
-        site = command.replace("go to","").strip().lower()
-        url  = website_urls.get(site, f"https://www.{site}.com" if "." not in site else f"https://{site}")
-        speak(f"Opening {site} in Chrome, Boss.")
-        open_in_chrome(url)
-        return
-
-    # ── Play (YouTube) ───────────────────────────────────────────────────────
-    # word-boundary check — "replay", "display" etc. won't trigger
-    _words = command.split()
-    if _words and _words[0] == "play" and len(_words) > 1:
-        song = command.split("play", 1)[1].strip()
-        kit = get_pywhatkit()
-        if not kit:
-            speak("YouTube play needs internet, Boss.")
-            return
-        speak(f"Playing {song} on YouTube, Boss.")
-        try:
-            kit.playonyt(song)
-        except Exception as e:
-            speak(f"Playback error, Boss: {e}")
-        return
-
-    # ── Open application ─────────────────────────────────────────────────────
-    # FIX: only match "open X" where X is not empty, checked after website
-    if command.startswith("open "):
-        app = command.replace("open","",1).strip()
-        if app:
-            if app in ["code", "vs code", "vscode", "visual studio code"]:
-                speak(open_code())
-                return
-            configured_path = app_paths.get(app)
-            if configured_path:
-                try:
-                    os.startfile(configured_path)
-                    speak(f"Opening {app}, Boss.")
-                except Exception as e:
-                    speak(f"Could not open {app}, Boss: {e}")
-            elif app in app_paths:
-                speak(f"No working path configured for {app}, Boss.")
-            else:
-                try:
-                    os.startfile(app)
-                    speak(f"Opening {app}, Boss.")
-                except Exception:
-                    try:
-                        subprocess.Popen(app)
-                        speak(f"Opening {app}, Boss.")
-                    except Exception:
-                        speak(f"Application '{app}' not found, Boss.")
-        return
-
-    # ── Launch (alias for open) ───────────────────────────────────────────────
-    if "launch" in command:
-        app = command.replace("launch","").strip()
-        if app in ["code", "vs code", "vscode", "visual studio code"]:
-            speak(open_code())
-            return
-        configured_path = app_paths.get(app)
-        if configured_path:
-            try:
-                os.startfile(configured_path)
-                speak(f"Launching {app}, Boss.")
-            except Exception as e:
-                speak(f"Could not launch {app}, Boss: {e}")
-        elif app in app_paths:
-            speak(f"No working path configured for {app}, Boss.")
-        else:
-            speak(f"No path configured for '{app}', Boss.")
-        return
-
-    # ── Screen capture ───────────────────────────────────────────────────────
     if "see my screen" in command or "capture screen" in command:
-        if capture_screen():
-            latest_frame_path = "live_screen.png"
-            open_in_chrome(os.path.abspath("live_screen.png"))
-            speak("Screen captured, Boss.")
-        else:
-            speak("Screen capture failed, Boss.")
+        if capture_screen(): latest_frame_path = "live_screen.png"; open_in_chrome(os.path.abspath("live_screen.png")); speak("Screen captured, Boss.")
+        else: speak("Screen capture failed, Boss.")
         return
-
-    # ── Read screen ──────────────────────────────────────────────────────────
     if "read my screen" in command or "what's on my screen" in command:
-        speak("Scanning screen, Boss.")
-        capture_screen()
-        text = extract_text_from_screen()
+        capture_screen(); text = extract_text_from_screen()
         if text:
-            for chunk in [text[i:i+200] for i in range(0, len(text), 200)]:
-                speak(chunk)
-        else:
-            speak("No readable text detected, Boss.")
+            for chunk in [text[i:i+200] for i in range(0, len(text), 200)]: speak(chunk)
+        else: speak("No readable text detected, Boss.")
         return
-
-    # ── Analyse screen ───────────────────────────────────────────────────────
     if "analyze screen" in command:
-        speak("Running analysis, Boss.")
-        capture_screen()
-        speak(analyze_screen_with_ai())
-        return
-
-    # ── Screen summary ───────────────────────────────────────────────────────
+        capture_screen(); speak(analyze_screen_with_ai()); return
     if "summarize screen" in command or "screen summary" in command:
-        capture_screen()
-        text = extract_text_from_screen()
-        if text:
-            speak(ask_ai(f"Concise summary of this screen content: {text[:500]}"))
-        else:
-            speak("No content to summarise, Boss.")
+        capture_screen(); text = extract_text_from_screen()
+        speak(ask_ai(f"Concise summary of this screen content: {text[:500]}") if text else "No content to summarise, Boss.")
         return
 
     # ── Memory ───────────────────────────────────────────────────────────────
     if "remember that" in command:
         info = command.split("remember that", 1)[1].strip()
-        if not info:
-            speak("What should I remember, Boss?")
-            return
-        save_memory(info)
-        speak("Logged to memory, Boss.")
-        return
-
+        if not info: speak("What should I remember, Boss?"); return
+        save_memory(info); speak("Logged to memory, Boss."); return
     if "what do you remember" in command:
         memories = get_memory()
         if memories:
-            speak("Memory contents, Boss:")
-            for mem in memories:
-                speak(mem)
-        else:
-            speak("Memory banks empty, Boss.")
+            for mem in memories: speak(mem)
+        else: speak("Memory banks empty, Boss.")
         return
-
     if "clear memory" in command:
-        with open(MEMORY_FILE, "w") as f:
-            json.dump([], f)
-        speak("Memory wiped, Boss.")
-        return
+        with open(MEMORY_FILE, "w") as f: json.dump([], f)
+        speak("Memory wiped, Boss."); return
 
-    # ── API status command ────────────────────────────────────────────────────
     if any(p in command for p in ["api status", "which api", "current api"]):
-        status = "Groq" if api_client else "Not configured"
-        speak(f"API status: {status}, Boss.")
-        return
+        speak(f"API status: {'Groq' if api_client else 'Not configured'}, Boss."); return
 
-    # ── Deep Learning powered features ───────────────────────────────────────
+    # ── Deep Learning commands ──────────────────────────────────────────────
     if DL_AVAILABLE:
         if any(p in command for p in ["dl status", "deep learning status", "ai module status"]):
             status = get_dl_status()
-            lines = [f"{k}: {v}" for k, v in status.items()]
-            speak("Deep learning status, Boss: " + ", ".join(lines))
-            return
-
+            speak("Deep learning status, Boss: " + ", ".join(f"{k}: {v}" for k, v in status.items())); return
         if any(p in command for p in ["analyze my emotion", "detect my emotion", "detect emotion", "my emotion"]):
-            capture_screen()
-            screen_text = extract_text_from_screen()
-            text_to_analyze = screen_text[:500] if screen_text else command
-            emotion_data = dl_emotion(text_to_analyze)
-            dominant = emotion_data.get("dominant_emotion", "neutral")
-            sentiment = emotion_data.get("sentiment", "neutral")
-            speak(f"Detected emotion: {dominant}, sentiment: {sentiment}, Boss.")
-            return
-
+            capture_screen(); text_to_analyze = (extract_text_from_screen() or command)[:500]
+            d = dl_emotion(text_to_analyze)
+            speak(f"Detected emotion: {d.get('dominant_emotion','neutral')}, sentiment: {d.get('sentiment','neutral')}, Boss."); return
         if any(p in command for p in ["describe image", "describe picture", "what's in this image", "what is in this image", "analyze image with ai vision"]):
             if latest_frame_path and os.path.exists(latest_frame_path):
-                speak("Running deep learning vision analysis, Boss.")
-                description = dl_describe_image(latest_frame_path)
-                if description:
-                    speak(f"Vision analysis: {description}")
-                else:
-                    speak("Vision model unavailable, using text analysis instead.")
-                    text = extract_text_from_screen()
-                    speak(text if text else "No content detected, Boss.")
-            else:
-                speak("No recent screen capture, Boss.")
+                desc = dl_describe_image(latest_frame_path)
+                speak(desc if desc else extract_text_from_screen() or "No content detected, Boss.")
+            else: speak("No recent screen capture, Boss.")
             return
 
-        if any(p in command for p in ["dl classify", "intent classify", "classify intent", "what intent"]):
-            result = dl_classify(command)
-            intent = result.get("intent", "general_chat")
-            confidence = result.get("intent_confidence", 0)
-            emotion = result.get("emotion", {}).get("dominant_emotion", "neutral")
-            top = result.get("top_intents", [])[:3]
-            top_str = ", ".join(f"{i[0]}({i[1]:.2f})" for i in top)
-            speak(f"Intent: {intent} ({confidence:.2f}). Top: {top_str}. Emotion: {emotion}. Boss.")
-            return
+    # ── Everything else → AI for conversation ───────────────────────────────
+    print(f"\n[AI ROUTE] {command}")
 
-        if any(p in command for p in ["dl train", "dl record", "log intent"]):
-            dl_trainer.record(command, "general_chat", True)
-            stats = dl_trainer.get_stats()
-            speak(f"Recorded, Boss. Total samples: {stats.get('total', 0)}, accuracy: {stats.get('accuracy', 0):.2f}")
-            return
-
-    # ── Help with task ───────────────────────────────────────────────────────
-    if "help me with" in command:
-        task = command.split("help me with", 1)[1].strip()
-        speak(ask_ai(f"How can I help with: {task}"))
+    # Check learned memory first
+    learned = _recall_learned(command)
+    if learned:
+        speak(learned)
         return
 
-    # ── Summary (generic) ────────────────────────────────────────────────────
-    if "summary" in command:
-        capture_screen()
-        text = extract_text_from_screen()
-        speak(ask_ai("Summarise this text: " + text) if text else "No text found, Boss.")
-        return
-
-    # ── Analyse this (from last frame) ───────────────────────────────────────
-    if any(p in command for p in ["analyze this", "what's in this", "what is in this"]):
-        if latest_frame_path:
-            text = extract_text_from_screen()
-            speak(text if text else "No text detected, Boss.")
-        else:
-            speak("No recent screen capture available, Boss.")
-        return
-
-    # ── Read PDF on screen ───────────────────────────────────────────────────
-    if "read this pdf on my screen" in command:
-        capture_screen()
-        text = extract_text_from_screen()
-        speak(text if text else "No text found, Boss.")
-        return
-
-    # ── DL-Enhanced routing (catches commands rule-based router misses) ──────
-    if DL_AVAILABLE:
-        dl_result = dl_classify(command)
-        dl_intent = dl_result.get("intent", "")
-        dl_confidence = dl_result.get("intent_confidence", 0)
-        dl_mapped = dl_result.get("mapped_command", "")
-
-        emotion_modifier = ""
-        emotion_data = dl_result.get("emotion", {})
-        if emotion_data:
-            emotion_modifier = dl_router.get_emotion_response_modifier(emotion_data)
-
-        if dl_confidence > 0.80 and dl_intent not in ("general_chat", "help_request"):
-            if dl_mapped and dl_mapped != command:
-                print(f"[DL ROUTE] {command} -> {dl_mapped} (intent={dl_intent}, conf={dl_confidence:.2f})")
-                dl_trainer.record(command, dl_intent, True)
-                action_result = ai_execute_task(dl_mapped)
-                if action_result:
-                    speak(str(action_result) + emotion_modifier)
-                    return
-
-        if dl_intent == "help_request":
-            dl_trainer.record(command, dl_intent, True)
-            result = ask_ai(f"User needs help. Briefly suggest useful FRIDAY commands for: {command}", use_history=False)
-            speak(result + emotion_modifier)
-            return
-
-        dl_trainer.record(command, dl_intent, True)
-
-    # ── Fallback: send to Groq as conversation ───────────────────────────────
+    # Try AI task execution (can call system functions)
     action_result = ai_execute_task(command)
     if action_result:
-        speak(action_result)
+        _learn(command, str(action_result))
+        speak(str(action_result))
         return
 
+    reply = ask_ai(command, use_history=True)
     if DL_AVAILABLE:
-        emotion_data = dl_emotion(command)
         modifier = dl_get_emotion_modifier(command)
-        reply = ask_ai(command, use_history=True)
-        if modifier:
-            reply = reply.rstrip(".") + ". " + modifier.strip()
-        speak(reply)
-    else:
-        speak(ask_ai(command, use_history=True))
+        if modifier: reply = reply.rstrip(".") + ". " + modifier.strip()
+    if reply:
+        _learn(command, reply)
+    speak(reply or "Processing failed, Boss.")
 
 
 # ── Wait for FRIDAY to finish speaking before mic opens ──────────────────────
-def wait_until_done_speaking(extra_pause=0.7):
+def wait_until_done_speaking(extra_pause=1.2):
     """
     Waits for speech to finish so mic does not pick up FRIDAY voice as command.
     Uses a polling loop with timeout instead of queue.join() to avoid deadlock.
@@ -3364,6 +3216,7 @@ def run():
     while True:
         cmd = listen()
         if "friday" in cmd:
+            show_overlay()
             stop_speaking = True
             pygame.mixer.music.stop()
             inline_command = cmd.replace("friday", "", 1).strip(" ,.")

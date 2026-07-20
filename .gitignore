@@ -22,3 +22,12 @@ friday_config.json
 
 # Auto-sync logs
 sync_log.txt
+
+ponytail/
+
+*.log
+
+friday_phone_qr.png
+
+friday_output/learned_responses.json
+
