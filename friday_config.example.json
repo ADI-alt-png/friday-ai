@@ -1,4 +1,4 @@
 {
-  "groq_api_key": "",
+  "groq_api_key": "YOUR_GROQ_API_KEY_HERE",
   "groq_model": "llama-3.3-70b-versatile"
 }

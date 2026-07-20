@@ -16,3 +16,6 @@ live_screen.png
 
 .DS_Store
 Thumbs.db
+
+# Local config with API keys (create your own from example)
+friday_config.json
