@@ -87,6 +87,7 @@ phone_remote_server = None
 phone_remote_worker_thread = None
 LAST_CONTEXT_FILE = os.path.join(OUTPUT_DIR, "last_context.txt")
 RESEARCH_MEMORY_FILE = os.path.join(OUTPUT_DIR, "research_memory.json")
+CHAT_HISTORY_FILE = os.path.join(OUTPUT_DIR, "chat_history.json")
 TASKS_FILE = os.path.join(OUTPUT_DIR, "tasks.json")
 COMMAND_HISTORY_FILE = os.path.join(OUTPUT_DIR, "command_history.jsonl")
 FILE_INDEX_FILE = os.path.join(OUTPUT_DIR, "file_index.json")
@@ -389,6 +390,38 @@ def build_phone_remote_page(token, remote_url):
 </body>
 </html>"""
 
+def add_chat_message(role, text):
+    """Save a chat message for phone-PC sync."""
+    history = []
+    if os.path.exists(CHAT_HISTORY_FILE):
+        try:
+            with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except:
+            history = []
+    history.append({
+        "role": role,
+        "text": str(text or "").strip(),
+        "time": datetime.now().strftime("%I:%M %p"),
+        "id": int(time.time() * 1000),
+    })
+    if len(history) > 200:
+        history = history[-200:]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2)
+    return history[-1]["id"]
+
+def get_chat_history(limit=50):
+    if not os.path.exists(CHAT_HISTORY_FILE):
+        return []
+    try:
+        with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        return history[-limit:]
+    except:
+        return []
+
 class PhoneRemoteHandler(BaseHTTPRequestHandler):
     def _query(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -413,29 +446,63 @@ class PhoneRemoteHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _send_file(self, filepath, status=200):
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = f.read()
+            raw = data.encode("utf-8")
+            self.send_response(status)
+            ext = os.path.splitext(filepath)[1].lower()
+            mime = {"html": "text/html", "css": "text/css", "js": "application/javascript", "json": "application/json", "png": "image/png"}
+            self.send_header("Content-Type", mime.get(ext.lstrip("."), "text/plain") + "; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        else:
+            self._send_html("<h1>Not found</h1>", status=404)
+
     def do_GET(self):
         parsed, query = self._query()
         if not self._authorized(query):
             self._send_html("<h1>FRIDAY remote locked</h1>", status=403)
             return
+
         if parsed.path == "/api/status":
             with PHONE_REMOTE_LOG_LOCK:
                 log = list(PHONE_REMOTE_LOG[-80:])
             self._send_json({"ok": True, "online": True, "log": log})
             return
-        if parsed.path in ["/", "/index.html"]:
-            self._send_html(build_phone_remote_page(PHONE_REMOTE_TOKEN, get_phone_remote_url()))
+
+        if parsed.path == "/api/history":
+            limit = int(query.get("limit", [50])[0])
+            messages = get_chat_history(limit)
+            self._send_json({"ok": True, "messages": messages})
             return
+
+        chat_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mobile_ui", "chat.html")
+        if parsed.path in ["/", "/index.html", "/chat.html"]:
+            if os.path.exists(chat_file):
+                with open(chat_file, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+                self._send_html(html_content)
+            else:
+                self._send_html(build_phone_remote_page(PHONE_REMOTE_TOKEN, get_phone_remote_url()))
+            return
+
+        mobile_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mobile_ui")
+        filepath = os.path.join(mobile_dir, parsed.path.lstrip("/"))
+        if os.path.exists(filepath) and os.path.commonpath([os.path.abspath(filepath), os.path.abspath(mobile_dir)]) == os.path.abspath(mobile_dir):
+            self._send_file(filepath)
+            return
+
         self._send_json({"ok": False, "message": "Not found."}, status=404)
 
     def do_POST(self):
         parsed, query = self._query()
-        if parsed.path != "/api/command":
-            self._send_json({"ok": False, "message": "Not found."}, status=404)
-            return
         if not self._authorized(query):
             self._send_json({"ok": False, "message": "Locked."}, status=403)
             return
+
         length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         command = ""
@@ -445,7 +512,22 @@ class PhoneRemoteHandler(BaseHTTPRequestHandler):
         except Exception:
             payload = urllib.parse.parse_qs(body)
             command = payload.get("command", [""])[0]
-        self._send_json(submit_phone_command(command))
+
+        if parsed.path == "/api/chat":
+            add_chat_message("user", command)
+            add_phone_log("user", command)
+            PHONE_REMOTE_QUEUE.put(command)
+            reply = execute_and_get_reply(command)
+            add_chat_message("friday", reply)
+            add_phone_log("friday", reply)
+            self._send_json({"ok": True, "reply": reply, "message": "Command sent to FRIDAY."})
+            return
+
+        if parsed.path == "/api/command":
+            self._send_json(submit_phone_command(command))
+            return
+
+        self._send_json({"ok": False, "message": "Not found."}, status=404)
 
     def log_message(self, format, *args):
         return
@@ -2312,11 +2394,14 @@ def short_voice_text(text, max_words=14, max_chars=130):
     return clean
 
 def speak(text):
+    global _last_reply
     print("FRIDAY:", text)
     print("-" * 50)
     clean = short_voice_text(text)
+    _last_reply = clean
     log_history("speech", clean)
     add_phone_log("friday", clean)
+    add_chat_message("friday", clean)
     update_text(clean)
     voice_queue.put(clean)
 
@@ -2729,13 +2814,23 @@ def run_local_command(command_text, powershell=False):
 # "open website" now checked BEFORE generic "open " to avoid false triggers.
 # "play" now requires word boundary check to avoid triggering on "replay" etc.
 
+_last_reply = ""
+
+def execute_and_get_reply(command):
+    """Execute command and capture the spoken reply text."""
+    global _last_reply
+    _last_reply = ""
+    execute(command)
+    return _last_reply or "Done, Boss."
+
 def execute(command):
-    global vmonitoring, latest_frame_path
+    global vmonitoring, latest_frame_path, _last_reply
 
     command = (command or "").strip().lower()
     if not command:
         return
     log_history("command", command)
+    add_chat_message("user", command)
 
     if command in [
         "connect phone", "connect my phone", "phone remote", "open phone remote",
